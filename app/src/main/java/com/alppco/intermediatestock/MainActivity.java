@@ -8,6 +8,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
@@ -50,7 +51,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (!BuildConfig.DEBUG && !isSignatureValid()) {
+        if (!isDebugBuild() && !isSignatureValid()) {
             new AlertDialog.Builder(this)
                     .setTitle("APP Gold Secure")
                     .setMessage("امضای امنیتی برنامه معتبر نیست. این نسخه ممکن است دستکاری یا دوباره امضا شده باشد.")
@@ -60,7 +61,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        WebView.setWebContentsDebuggingEnabled(isDebugBuild());
         createNotificationChannel();
         requestNotificationPermissionIfNeeded();
 
@@ -143,6 +144,10 @@ public class MainActivity extends Activity {
                 webView.loadUrl(START_URL);
             }
         }
+    }
+
+    private boolean isDebugBuild() {
+        return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private boolean isSignatureValid() {
