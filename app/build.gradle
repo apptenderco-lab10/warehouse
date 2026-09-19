@@ -7,17 +7,27 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.alppco.appgold"
+        applicationId "com.alppco.appgold.secure"
         minSdk 24
         targetSdk 35
-        versionCode 200
-        versionName "2.0.0"
+        versionCode 210
+        versionName "2.1.0"
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+        }
         release {
-            minifyEnabled false
+            debuggable false
+            jniDebuggable false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.17.0"
 }
