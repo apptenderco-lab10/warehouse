@@ -1,0 +1,120 @@
+name: Build APP Gold Manager Windows v2.0.1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [app-gold]
+    paths:
+      - "windows-manager/**"
+      - ".github/workflows/build-app-gold-manager-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify manager source markers
+        shell: pwsh
+        run: |
+          $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
+          $required = @(
+            "APP Gold Manager v2.0.1",
+            'id="presenceTab"',
+            'id="presence"',
+            'id="presenceList"',
+            "user_presence",
+            "ManagerDesktop",
+            "آنلاین اکنون",
+            "آخرین اتصال"
+          )
+          foreach ($marker in $required) {
+            if (-not $html.Contains($marker)) { throw "Missing marker: $marker" }
+          }
+          $pkg = Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
+          if ($pkg.version -ne "2.0.1") { throw "Wrong version" }
+          if ($pkg.build.appId -ne "com.alppco.appgold.manager.windows") { throw "Wrong appId" }
+          if ($pkg.build.productName -ne "APP Gold Manager") { throw "Wrong product name" }
+          Write-Host "SOURCE_MARKERS_OK"
+
+      - name: JavaScript syntax checks
+        shell: pwsh
+        run: |
+          node --check windows-manager/main.js
+          node --check windows-manager/preload.js
+          $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
+          $m = [regex]::Match($html, '<script>([\s\S]*?)</script>')
+          if (-not $m.Success) { throw "Inline script not found" }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\manager-app.js", $m.Groups[1].Value, [Text.UTF8Encoding]::new($false))
+          node --check "$env:RUNNER_TEMP\manager-app.js"
+          Write-Host "JS_SYNTAX_OK"
+
+      - name: Install pinned dependencies
+        working-directory: windows-manager
+        run: npm install --no-audit --no-fund
+
+      - name: Build Windows installer
+        working-directory: windows-manager
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist
+
+      - name: Validate installer and packaged app
+        shell: pwsh
+        run: |
+          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe" -ErrorAction Stop
+          if ($installer.Length -lt 50000000) { throw "Installer unexpectedly small: $($installer.Length)" }
+          $packed = Get-Item "windows-manager/dist/win-unpacked/APP Gold Manager.exe" -ErrorAction Stop
+          if ($packed.Length -lt 50000000) { throw "Packaged EXE unexpectedly small: $($packed.Length)" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  APP-Gold-Manager-v2.0.1-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256"
+          Write-Host "BUILD_VALIDATION_OK size=$($installer.Length) sha256=$hash"
+
+      - name: Runtime smoke test
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "windows-manager/dist/win-unpacked/APP Gold Manager.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--disable-gpu" -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "APP Gold Manager exited during smoke test with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "RUNTIME_SMOKE_OK"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APP-Gold-Manager-v2.0.1-Windows
+          path: |
+            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-gold-manager-windows-v2.0.1
+          name: APP Gold Manager v2.0.1 — Windows
+          target_commitish: app-gold
+          body: |
+            Manager-only Windows build.
+            - Online / recent / offline personnel status
+            - Last connection timestamp
+            - Auto refresh every 15 seconds
+            - Presence visibility restricted to admin by Supabase RLS
+            - Existing APP Gold management features preserved
+
+            Note: this installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher.
+          files: |
+            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256
