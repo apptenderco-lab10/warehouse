@@ -17,10 +17,14 @@ import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
+
+import androidx.webkit.WebViewAssetLoader;
 
 import java.io.OutputStream;
 
@@ -28,7 +32,9 @@ public class MainActivity extends Activity {
     private static final int REQUEST_SAVE_FILE = 6101;
     private static final int REQUEST_OPEN_FILE = 6102;
     private static final int REQUEST_NOTIFICATIONS = 6103;
-    private static final String CHANNEL_ID = "app_hr_announcements";
+    private static final String CHANNEL_ID = "app_gold_announcements";
+    private static final String APP_ORIGIN = "https://appassets.androidplatform.net";
+    private static final String APP_URL = APP_ORIGIN + "/assets/www/index.html";
 
     private WebView webView;
     private byte[] pendingSaveBytes;
@@ -40,29 +46,56 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        WebView.setWebContentsDebuggingEnabled(false);
         createNotificationChannel();
         requestNotificationPermissionIfNeeded();
 
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(245, 249, 255));
+        webView.setBackgroundColor(Color.rgb(255, 253, 245));
         webView.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
+        settings.setDatabaseEnabled(false);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setSafeBrowsingEnabled(true);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            settings.setAllowFileAccessFromFileURLs(false);
+            settings.setAllowUniversalAccessFromFileURLs(false);
         }
 
+        final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
+
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if (APP_ORIGIN.equals(uri.getScheme() + "://" + uri.getHost())) return false;
+                if ("https".equalsIgnoreCase(uri.getScheme())) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (Exception ignored) {}
+                }
+                return true;
+            }
+        });
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
@@ -77,7 +110,7 @@ public class MainActivity extends Activity {
         });
 
         if (savedInstanceState == null) {
-            webView.loadUrl("file:///android_asset/www/index.html");
+            webView.loadUrl(APP_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
@@ -88,7 +121,7 @@ public class MainActivity extends Activity {
             NotificationManager nm = getSystemService(NotificationManager.class);
             NotificationChannel ch = new NotificationChannel(
                     CHANNEL_ID,
-                    "اطلاعیه‌های APP HR",
+                    "اطلاعیه‌های APP Gold",
                     NotificationManager.IMPORTANCE_HIGH
             );
             ch.setDescription("اطلاعیه‌ها و پیام‌های داخلی شرکت");
@@ -116,6 +149,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.removeJavascriptInterface("Android");
+            webView.stopLoading();
+            webView.destroy();
+        }
+        super.onDestroy();
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
@@ -127,7 +170,7 @@ public class MainActivity extends Activity {
                     stream.flush();
                     Toast.makeText(this, "فایل ذخیره شد.", Toast.LENGTH_SHORT).show();
                 } catch (Exception error) {
-                    Toast.makeText(this, "ذخیره فایل ناموفق بود: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "ذخیره فایل ناموفق بود.", Toast.LENGTH_LONG).show();
                 }
             }
             pendingSaveBytes = null;
@@ -154,7 +197,7 @@ public class MainActivity extends Activity {
                     pendingSaveMime = (mimeType == null || mimeType.trim().isEmpty())
                             ? "application/octet-stream" : mimeType;
                     String safeName = (fileName == null || fileName.trim().isEmpty())
-                            ? "APP-HR-Export.bin"
+                            ? "APP-Gold-Export.bin"
                             : fileName.replaceAll("[\\\\/:*?\"<>|]", "-");
 
                     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -170,15 +213,13 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setSession(String accessToken, String refreshToken) {
-            getSharedPreferences("app_hr_session", MODE_PRIVATE)
-                    .edit()
-                    .putString("access_token", accessToken == null ? "" : accessToken)
-                    .putString("refresh_token", refreshToken == null ? "" : refreshToken)
-                    .apply();
+            // Intentionally no-op: tokens remain inside WebView's sandboxed storage.
+            // Do not duplicate access/refresh tokens into plain SharedPreferences.
         }
 
         @JavascriptInterface
         public void clearSession() {
+            // Remove any legacy token copies created by older builds.
             getSharedPreferences("app_hr_session", MODE_PRIVATE).edit().clear().apply();
         }
 
@@ -210,7 +251,7 @@ public class MainActivity extends Activity {
                     }
 
                     builder.setSmallIcon(android.R.drawable.ic_dialog_info)
-                            .setContentTitle(title == null ? "APP HR" : title)
+                            .setContentTitle(title == null ? "APP Gold" : title)
                             .setContentText(body == null ? "" : body)
                             .setStyle(new android.app.Notification.BigTextStyle().bigText(body == null ? "" : body))
                             .setAutoCancel(true)
