@@ -1,6 +1,6 @@
 {
   "name": "app-gold-manager-windows",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "description": "APP Gold Manager - Windows desktop client",
   "main": "main.js",
