@@ -2,8 +2,8 @@ const { app, BrowserWindow, dialog, ipcMain, Notification, shell } = require('el
 const path = require('path');
 const fs = require('fs');
 
-app.setName('APP HR Online');
-app.setAppUserModelId('com.alppco.apphronline.windows');
+app.setName('APP Gold');
+app.setAppUserModelId('com.alppco.appgold.windows');
 
 let mainWindow = null;
 
@@ -14,7 +14,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 650,
     show: false,
-    backgroundColor: '#f4f8ff',
+    backgroundColor: '#fffdf5',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -51,7 +51,7 @@ function createWindow() {
 
 ipcMain.on('apphr:save-base64', async (_event, payload) => {
   try {
-    const fileName = String(payload?.fileName || 'APP-HR-Export.bin').replace(/[\\/:*?"<>|]/g, '-');
+    const fileName = String(payload?.fileName || 'APP-Gold-Export.bin').replace(/[\\/:*?"<>|]/g, '-');
     const mimeType = String(payload?.mimeType || 'application/octet-stream');
     const base64Data = String(payload?.base64Data || '');
 
@@ -74,7 +74,7 @@ ipcMain.on('apphr:notify', (_event, payload) => {
   try {
     if (!Notification.isSupported()) return;
     const n = new Notification({
-      title: String(payload?.title || 'APP HR Online'),
+      title: String(payload?.title || 'APP Gold'),
       body: String(payload?.body || ''),
       urgency: payload?.priority === 'important' ? 'critical' : 'normal'
     });
