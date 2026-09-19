@@ -174,15 +174,23 @@ jobs:
             exit 1
           fi
 
-          cp "$APK" APP-Gold-Secure-v2.1.0-UNSIGNED.apk
-          sha256sum APP-Gold-Secure-v2.1.0-UNSIGNED.apk > APP-Gold-Secure-v2.1.0-UNSIGNED.apk.sha256
-          echo "UNSIGNED_RELEASE_OK"
+          ZIPALIGN="$ANDROID_HOME/build-tools/35.0.1/zipalign"
+          test -x "$ZIPALIGN"
+          "$ZIPALIGN" -p -f 4 "$APK" APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk
+          test -s APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk
+          sha256sum APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk > APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk.sha256
 
-      - name: Upload unsigned release for private signing
+          mkdir -p local-signing-tools
+          cp "$ANDROID_HOME/build-tools/35.0.1/lib/apksigner.jar" local-signing-tools/apksigner.jar
+          test -s local-signing-tools/apksigner.jar
+          echo "ALIGNED_UNSIGNED_RELEASE_OK"
+
+      - name: Upload aligned unsigned release for private signing
         uses: actions/upload-artifact@v4
         with:
           name: APP-Gold-Secure-v2.1.0-unsigned
           path: |
-            APP-Gold-Secure-v2.1.0-UNSIGNED.apk
-            APP-Gold-Secure-v2.1.0-UNSIGNED.apk.sha256
+            APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk
+            APP-Gold-Secure-v2.1.0-ALIGNED-UNSIGNED.apk.sha256
+            local-signing-tools/apksigner.jar
           retention-days: 7
