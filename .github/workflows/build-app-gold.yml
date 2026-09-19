@@ -1,0 +1,128 @@
+name: Build APP Gold Android v2.0.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [app-gold]
+    paths:
+      - "app/**"
+      - "supabase/**"
+      - ".github/workflows/build-app-gold.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout APP Gold
+        uses: actions/checkout@v4
+
+      - name: Verify APP Gold source markers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/assets/www/index.html")
+          s = p.read_text(encoding="utf-8")
+          required = [
+              "APP Gold",
+              'id="rewards"',
+              'id="tenureText"',
+              'id="rewardLevel"',
+              'id="rewardScore"',
+              'id="goldM"',
+              "تولید تیوب نسوز",
+              "تولید هد سمپلر",
+              "تولید کابل",
+              "تولید لنس",
+              "حضور ارزشمند شما ضامن سعادت تمامی پرسنل می‌باشد.",
+              "reward_history",
+              "hire_date",
+              "work_sections",
+          ]
+          missing = [x for x in required if x not in s]
+          if missing:
+              raise SystemExit("Missing APP Gold markers: " + repr(missing))
+          if 'id="accDept"' in s:
+              raise SystemExit("Legacy free-text department field still exists")
+          print("SOURCE_MARKERS_OK")
+          PY
+
+      - name: JavaScript syntax check
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s = Path("app/src/main/assets/www/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", s, re.S)
+          if not scripts:
+              raise SystemExit("No inline script found")
+          Path("/tmp/app-gold.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/app-gold.js
+          echo "JS_SYNTAX_OK"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk APP-Gold-v2.0.0.apk
+          sha256sum APP-Gold-v2.0.0.apk > APP-Gold-v2.0.0.apk.sha256
+          echo "APK_OK"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APP-Gold-v2.0.0
+          path: |
+            APP-Gold-v2.0.0.apk
+            APP-Gold-v2.0.0.apk.sha256
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-gold-v2.0.0
+          name: APP Gold v2.0.0
+          target_commitish: app-gold
+          body: |
+            APP Gold v2.0.0
+            - Gold / Silver / Bronze / No-level reward area
+            - Manual reward score controlled by management
+            - Up to two work sections per employee
+            - Hire date and live team-tenure message
+            - Reward change history
+            - Existing HR, announcements and purchase modules preserved
+            - New Android application id for safe side-by-side installation
+          files: |
+            APP-Gold-v2.0.0.apk
+            APP-Gold-v2.0.0.apk.sha256
