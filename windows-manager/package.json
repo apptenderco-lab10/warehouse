@@ -1,0 +1,47 @@
+{
+  "name": "app-gold-manager-windows",
+  "version": "2.0.1",
+  "private": true,
+  "description": "APP Gold Manager - Windows desktop client",
+  "main": "main.js",
+  "author": "Alloy Pardazesh Parseh",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.alppco.appgold.manager.windows",
+    "productName": "APP Gold Manager",
+    "artifactName": "APP-Gold-Manager-v${version}-Windows-Setup.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "www/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "APP Gold Manager",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
