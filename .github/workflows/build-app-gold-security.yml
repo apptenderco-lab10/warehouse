@@ -98,6 +98,10 @@ jobs:
           cp "$APK" APP-Gold-Security-v2.1.0-unsigned.apk
           cp app/build/outputs/mapping/release/mapping.txt APP-Gold-Security-v2.1.0-mapping.txt
           sha256sum APP-Gold-Security-v2.1.0-unsigned.apk > APP-Gold-Security-v2.1.0-unsigned.apk.sha256
+          mkdir -p signing-tools/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" signing-tools/apksigner
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signing-tools/lib/apksigner.jar
+          chmod +x signing-tools/apksigner
           echo "HARDENED_RELEASE_OK"
 
       - name: Upload unsigned hardened release
@@ -108,4 +112,5 @@ jobs:
             APP-Gold-Security-v2.1.0-unsigned.apk
             APP-Gold-Security-v2.1.0-unsigned.apk.sha256
             APP-Gold-Security-v2.1.0-mapping.txt
+            signing-tools/**
           retention-days: 30
