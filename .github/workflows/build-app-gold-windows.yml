@@ -1,0 +1,120 @@
+name: Build APP Gold Windows v2.0.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [app-gold]
+    paths:
+      - "windows/**"
+      - "app/src/main/assets/www/index.html"
+      - ".github/workflows/build-app-gold-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout APP Gold
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Copy APP Gold web UI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path windows/www | Out-Null
+          Copy-Item -Force app/src/main/assets/www/index.html windows/www/index.html
+
+      - name: Verify APP Gold source
+        shell: pwsh
+        run: |
+          $html = Get-Content -Raw -Encoding UTF8 "windows/www/index.html"
+          $required = @(
+            "APP Gold",
+            'id="rewards"',
+            'id="tenureText"',
+            'id="rewardLevel"',
+            'id="goldM"',
+            "حضور ارزشمند شما ضامن سعادت تمامی پرسنل می‌باشد.",
+            "reward_history",
+            "hire_date",
+            "work_sections"
+          )
+          foreach ($marker in $required) {
+            if (-not $html.Contains($marker)) { throw "Missing marker: $marker" }
+          }
+          $pkg = Get-Content -Raw -Encoding UTF8 "windows/package.json" | ConvertFrom-Json
+          if ($pkg.version -ne "2.0.0") { throw "Wrong package version" }
+          if ($pkg.build.appId -ne "com.alppco.appgold.windows") { throw "Wrong appId" }
+          if ($pkg.build.productName -ne "APP Gold") { throw "Wrong product name" }
+          Write-Host "SOURCE_MARKERS_OK"
+
+      - name: JavaScript syntax checks
+        shell: pwsh
+        run: |
+          node --check windows/main.js
+          node --check windows/preload.js
+          $html = Get-Content -Raw -Encoding UTF8 "windows/www/index.html"
+          $m = [regex]::Match($html, '<script>([\s\S]*?)</script>')
+          if (-not $m.Success) { throw "Inline app script not found" }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\app-gold.js", $m.Groups[1].Value, [Text.UTF8Encoding]::new($false))
+          node --check "$env:RUNNER_TEMP\app-gold.js"
+          Write-Host "JS_SYNTAX_OK"
+
+      - name: Install pinned dependencies
+        working-directory: windows
+        run: npm install --no-audit --no-fund
+
+      - name: Build Windows installer
+        working-directory: windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist
+
+      - name: Validate Windows installer
+        shell: pwsh
+        run: |
+          $file = Get-Item "windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe" -ErrorAction Stop
+          if ($file.Length -lt 50000000) { throw "Installer file is unexpectedly small: $($file.Length)" }
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  APP-Gold-v2.0.0-Windows-Setup.exe" | Set-Content -Encoding ascii "windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe.sha256"
+          Write-Host "EXE_OK size=$($file.Length) sha256=$hash"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APP-Gold-v2.0.0-Windows
+          path: |
+            windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe
+            windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe.sha256
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-gold-windows-v2.0.0
+          name: APP Gold v2.0.0 — Windows
+          target_commitish: app-gold
+          body: |
+            APP Gold v2.0.0 for Windows 10/11 x64.
+
+            Includes:
+            - Gold / Silver / Bronze / No-level reward area
+            - Manual reward scoring
+            - Up to two work sections per employee
+            - Hire date and live team-tenure message
+            - Reward change history
+            - Existing HR, announcements and purchase modules
+
+            This Windows build uses a separate APP Gold application identity.
+            Note: this installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher on first install.
+          files: |
+            windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe
+            windows/dist/APP-Gold-v2.0.0-Windows-Setup.exe.sha256
