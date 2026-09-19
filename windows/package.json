@@ -1,8 +1,8 @@
 {
-  "name": "app-hr-online-windows",
-  "version": "1.6.0",
+  "name": "app-gold-windows",
+  "version": "2.0.0",
   "private": true,
-  "description": "APP HR Online - Windows desktop client",
+  "description": "APP Gold - Windows desktop client",
   "main": "main.js",
   "author": "Alloy Pardazesh Parseh",
   "license": "UNLICENSED",
@@ -14,9 +14,9 @@
     "electron-builder": "26.15.3"
   },
   "build": {
-    "appId": "com.alppco.apphronline.windows",
-    "productName": "APP HR Online",
-    "artifactName": "APP-HR-Online-v${version}-Windows-Setup.${ext}",
+    "appId": "com.alppco.appgold.windows",
+    "productName": "APP Gold",
+    "artifactName": "APP-Gold-v${version}-Windows-Setup.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -40,7 +40,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "APP HR Online",
+      "shortcutName": "APP Gold",
       "deleteAppDataOnUninstall": false
     }
   }
