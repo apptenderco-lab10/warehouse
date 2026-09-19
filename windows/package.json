@@ -1,0 +1,47 @@
+{
+  "name": "app-hr-online-windows",
+  "version": "1.6.0",
+  "private": true,
+  "description": "APP HR Online - Windows desktop client",
+  "main": "main.js",
+  "author": "Alloy Pardazesh Parseh",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.alppco.apphronline.windows",
+    "productName": "APP HR Online",
+    "artifactName": "APP-HR-Online-v${version}-Windows-Setup.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "www/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "APP HR Online",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
