@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('Android', {
     ipcRenderer.send('apphr:save-base64', { fileName, mimeType, base64Data });
   },
   setSession() {
-    // The web app already persists the authenticated Supabase session in localStorage.
+    // APP Gold persists the authenticated Supabase session in localStorage.
   },
   clearSession() {
     // The web app clears its own session state.
