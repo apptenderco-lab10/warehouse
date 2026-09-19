@@ -7,11 +7,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.alppco.apphronline"
+        applicationId "com.alppco.appgold"
         minSdk 24
         targetSdk 35
-        versionCode 160
-        versionName "1.6.0"
+        versionCode 200
+        versionName "2.0.0"
     }
 
     buildTypes {
