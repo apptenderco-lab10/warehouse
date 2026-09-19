@@ -1,0 +1,80 @@
+name: Build APP HR Online Windows v1.6.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [app-hr-online]
+    paths:
+      - "windows/**"
+      - "app/src/main/assets/www/index.html"
+      - ".github/workflows/build-hr-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout HR branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: windows/package.json
+
+      - name: Copy APP HR web UI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path windows/www | Out-Null
+          Copy-Item -Force app/src/main/assets/www/index.html windows/www/index.html
+
+      - name: Install pinned dependencies
+        working-directory: windows
+        run: npm install --no-audit --no-fund
+
+      - name: Build Windows installer
+        working-directory: windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist
+
+      - name: Validate installer exists
+        shell: pwsh
+        run: |
+          $file = Get-ChildItem "windows/dist/APP-HR-Online-v1.6.0-Windows-Setup.exe" -ErrorAction Stop
+          if ($file.Length -lt 1000000) { throw "Installer file is unexpectedly small." }
+          Write-Host "Installer size:" $file.Length
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APP-HR-Online-v1.6.0-Windows
+          path: windows/dist/APP-HR-Online-v1.6.0-Windows-Setup.exe
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-hr-windows-v1.6.0
+          name: APP HR Online v1.6.0 — Windows
+          target_commitish: app-hr-online
+          body: |
+            APP HR Online v1.6.0 for Windows 10/11 x64.
+
+            Uses the same Supabase backend and user accounts as the Android version.
+
+            Features:
+            - HR requests
+            - Purchase requests and access permissions
+            - Purchase management
+            - Real XLSX export with Windows Save As
+            - Native Windows notifications
+
+            Note: this build is not commercially code-signed, so Windows SmartScreen may show an Unknown Publisher warning on first install.
+          files: windows/dist/APP-HR-Online-v1.6.0-Windows-Setup.exe
