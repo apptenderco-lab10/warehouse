@@ -1,12 +1,18 @@
 package com.alppco.intermediatestock;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
+import android.util.Base64;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -17,15 +23,16 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
-    private static final int REQUEST_SAVE_FILE = 4101;
-    private static final int REQUEST_OPEN_FILE = 4102;
+    private static final int REQUEST_SAVE_FILE = 6101;
+    private static final int REQUEST_OPEN_FILE = 6102;
+    private static final int REQUEST_NOTIFICATIONS = 6103;
+    private static final String CHANNEL_ID = "app_hr_announcements";
 
     private WebView webView;
-    private String pendingSaveRequestId;
-    private String pendingSaveContent;
+    private byte[] pendingSaveBytes;
+    private String pendingSaveMime;
     private ValueCallback<Uri[]> pendingFileCallback;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -33,8 +40,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        createNotificationChannel();
+        requestNotificationPermissionIfNeeded();
+
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(243, 248, 248));
+        webView.setBackgroundColor(Color.rgb(245, 249, 255));
         webView.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(webView);
 
@@ -47,22 +57,20 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        }
 
-        webView.addJavascriptInterface(new AndroidFilesBridge(), "AndroidFiles");
+        webView.addJavascriptInterface(new AndroidBridge(), "Android");
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                if (pendingFileCallback != null) {
-                    pendingFileCallback.onReceiveValue(null);
-                }
+                if (pendingFileCallback != null) pendingFileCallback.onReceiveValue(null);
                 pendingFileCallback = callback;
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("*/*");
-                intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
-                        "application/json", "application/octet-stream", "text/plain"
-                });
                 startActivityForResult(intent, REQUEST_OPEN_FILE);
                 return true;
             }
@@ -75,6 +83,26 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            NotificationChannel ch = new NotificationChannel(
+                    CHANNEL_ID,
+                    "اطلاعیه‌های APP HR",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            ch.setDescription("اطلاعیه‌ها و پیام‌های داخلی شرکت");
+            nm.createNotificationChannel(ch);
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+        }
+    }
+
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         webView.saveState(outState);
@@ -83,11 +111,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        if (webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override
@@ -95,21 +120,18 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == REQUEST_SAVE_FILE) {
-            boolean saved = false;
-            if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingSaveContent != null) {
-                try (OutputStream stream = getContentResolver().openOutputStream(data.getData(), "wt")) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingSaveBytes != null) {
+                try (OutputStream stream = getContentResolver().openOutputStream(data.getData(), "w")) {
                     if (stream == null) throw new IllegalStateException("مسیر فایل قابل نوشتن نیست.");
-                    stream.write(pendingSaveContent.getBytes(StandardCharsets.UTF_8));
+                    stream.write(pendingSaveBytes);
                     stream.flush();
-                    saved = true;
-                    Toast.makeText(this, "فایل با موفقیت ذخیره شد.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "فایل ذخیره شد.", Toast.LENGTH_SHORT).show();
                 } catch (Exception error) {
                     Toast.makeText(this, "ذخیره فایل ناموفق بود: " + error.getMessage(), Toast.LENGTH_LONG).show();
                 }
             }
-            notifySaveResult(saved);
-            pendingSaveContent = null;
-            pendingSaveRequestId = null;
+            pendingSaveBytes = null;
+            pendingSaveMime = null;
             return;
         }
 
@@ -123,37 +145,81 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void notifySaveResult(boolean saved) {
-        if (pendingSaveRequestId == null) return;
-        String safeId = pendingSaveRequestId.replace("\\", "\\\\").replace("'", "\\'");
-        webView.evaluateJavascript(
-                "window.__nativeSaveResult && window.__nativeSaveResult('" + safeId + "'," + saved + ");",
-                null
-        );
-    }
-
-    public class AndroidFilesBridge {
+    public class AndroidBridge {
         @JavascriptInterface
-        public void saveTextFile(String requestId, String fileName, String content) {
+        public void saveBase64(String fileName, String mimeType, String base64Data) {
             runOnUiThread(() -> {
-                if (pendingSaveRequestId != null) {
-                    notifySaveResult(false);
-                }
-                pendingSaveRequestId = requestId;
-                pendingSaveContent = content;
+                try {
+                    pendingSaveBytes = Base64.decode(base64Data, Base64.DEFAULT);
+                    pendingSaveMime = (mimeType == null || mimeType.trim().isEmpty())
+                            ? "application/octet-stream" : mimeType;
+                    String safeName = (fileName == null || fileName.trim().isEmpty())
+                            ? "APP-HR-Export.bin"
+                            : fileName.replaceAll("[\\\\/:*?\"<>|]", "-");
 
-                String safeName = fileName == null ? "APP-Stock.json" : fileName.replaceAll("[\\\\/:*?\"<>|]", "-");
-                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/octet-stream");
-                intent.putExtra(Intent.EXTRA_TITLE, safeName);
-                startActivityForResult(intent, REQUEST_SAVE_FILE);
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType(pendingSaveMime);
+                    intent.putExtra(Intent.EXTRA_TITLE, safeName);
+                    startActivityForResult(intent, REQUEST_SAVE_FILE);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "ساخت فایل ناموفق بود.", Toast.LENGTH_LONG).show();
+                }
             });
         }
 
         @JavascriptInterface
-        public String getDeviceId() {
-            return Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        public void setSession(String accessToken, String refreshToken) {
+            getSharedPreferences("app_hr_session", MODE_PRIVATE)
+                    .edit()
+                    .putString("access_token", accessToken == null ? "" : accessToken)
+                    .putString("refresh_token", refreshToken == null ? "" : refreshToken)
+                    .apply();
+        }
+
+        @JavascriptInterface
+        public void clearSession() {
+            getSharedPreferences("app_hr_session", MODE_PRIVATE).edit().clear().apply();
+        }
+
+        @JavascriptInterface
+        public void notifyAnnouncement(String id, String title, String body, String priority) {
+            runOnUiThread(() -> {
+                try {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+
+                    Intent launch = new Intent(MainActivity.this, MainActivity.class);
+                    launch.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+                    PendingIntent pi = PendingIntent.getActivity(
+                            MainActivity.this,
+                            (id == null ? 0 : id.hashCode()),
+                            launch,
+                            flags
+                    );
+
+                    android.app.Notification.Builder builder;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        builder = new android.app.Notification.Builder(MainActivity.this, CHANNEL_ID);
+                    } else {
+                        builder = new android.app.Notification.Builder(MainActivity.this);
+                    }
+
+                    builder.setSmallIcon(android.R.drawable.ic_dialog_info)
+                            .setContentTitle(title == null ? "APP HR" : title)
+                            .setContentText(body == null ? "" : body)
+                            .setStyle(new android.app.Notification.BigTextStyle().bigText(body == null ? "" : body))
+                            .setAutoCancel(true)
+                            .setContentIntent(pi);
+
+                    NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    nm.notify(id == null ? (int) System.currentTimeMillis() : id.hashCode(), builder.build());
+                } catch (Exception ignored) {}
+            });
         }
     }
 }
