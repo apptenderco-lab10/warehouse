@@ -63,7 +63,7 @@ jobs:
               'android:networkSecurityConfig="@xml/network_security_config"',
           ]
           required_java = [
-              'WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)',
+              'WebView.setWebContentsDebuggingEnabled(isDebugBuild())',
               'settings.setAllowFileAccess(false)',
               'settings.setAllowContentAccess(false)',
               'settings.setAllowUniversalAccessFromFileURLs(false)',
