@@ -1,4 +1,4 @@
-name: Build APP Gold Manager Windows v2.0.1
+name: Build APP Gold Manager Windows v2.0.2
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
         run: |
           $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
           $required = @(
-            "APP Gold Manager v2.0.1",
+            "APP Gold Manager v2.0.2",
             'id="presenceTab"',
             'id="presence"',
             'id="presenceList"',
@@ -43,7 +43,7 @@ jobs:
             if (-not $html.Contains($marker)) { throw "Missing marker: $marker" }
           }
           $pkg = Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
-          if ($pkg.version -ne "2.0.1") { throw "Wrong version" }
+          if ($pkg.version -ne "2.0.2") { throw "Wrong version" }
           if ($pkg.build.appId -ne "com.alppco.appgold.manager.windows") { throw "Wrong appId" }
           if ($pkg.build.productName -ne "APP Gold Manager") { throw "Wrong product name" }
           Write-Host "SOURCE_MARKERS_OK"
@@ -73,12 +73,12 @@ jobs:
       - name: Validate installer and packaged app
         shell: pwsh
         run: |
-          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe" -ErrorAction Stop
+          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe" -ErrorAction Stop
           if ($installer.Length -lt 50000000) { throw "Installer unexpectedly small: $($installer.Length)" }
           $packed = Get-Item "windows-manager/dist/win-unpacked/APP Gold Manager.exe" -ErrorAction Stop
           if ($packed.Length -lt 50000000) { throw "Packaged EXE unexpectedly small: $($packed.Length)" }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  APP-Gold-Manager-v2.0.1-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256"
+          "$hash  APP-Gold-Manager-v2.0.2-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256"
           Write-Host "BUILD_VALIDATION_OK size=$($installer.Length) sha256=$hash"
 
       - name: Runtime smoke test
@@ -94,17 +94,17 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-Manager-v2.0.1-Windows
+          name: APP-Gold-Manager-v2.0.2-Windows
           path: |
-            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256
           retention-days: 90
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-manager-windows-v2.0.1
-          name: APP Gold Manager v2.0.1 — Windows
+          tag_name: app-gold-manager-windows-v2.0.2
+          name: APP Gold Manager v2.0.2 — Windows
           target_commitish: app-gold
           body: |
             Manager-only Windows build.
@@ -116,5 +116,5 @@ jobs:
 
             Note: this installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher.
           files: |
-            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.0.1-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256
