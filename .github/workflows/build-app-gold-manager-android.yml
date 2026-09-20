@@ -42,7 +42,7 @@ jobs:
               raise SystemExit("Missing markers: "+repr(missing))
           if "renderBuyItems(prevItem)" not in s:
               raise SystemExit("Background refresh does not preserve selected item")
-          if "'<option value="">انتخاب نشده</option>'" not in s:
+          if 'انتخاب نشده</option>' not in s:
               raise SystemExit("Purchase item does not default to an explicit unselected state")
           print("PURCHASE_MARKERS_OK")
           PY
