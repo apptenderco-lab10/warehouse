@@ -1,4 +1,4 @@
-name: Build APP Gold Android v2.0.0
+name: Build APP Gold Android v2.2.0
 
 on:
   workflow_dispatch:
@@ -42,6 +42,9 @@ jobs:
               "reward_history",
               "hire_date",
               "work_sections",
+              'id="openBuyItemPicker"',
+              "تاریخچه اقلام خرید",
+              "autoFilter",
           ]
           missing = [x for x in required if x not in s]
           if missing:
@@ -89,40 +92,44 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:assembleStaffDebug
 
       - name: Verify APK
         shell: bash
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk APP-Gold-v2.0.0.apk
-          sha256sum APP-Gold-v2.0.0.apk > APP-Gold-v2.0.0.apk.sha256
+          test -s app/build/outputs/apk/staff/debug/app-staff-debug.apk
+          cp app/build/outputs/apk/staff/debug/app-staff-debug.apk APP-Gold-v2.2.0.apk
+          sha256sum APP-Gold-v2.2.0.apk > APP-Gold-v2.2.0.apk.sha256
           echo "APK_OK"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-v2.0.0
+          name: APP-Gold-v2.2.0
           path: |
-            APP-Gold-v2.0.0.apk
-            APP-Gold-v2.0.0.apk.sha256
+            APP-Gold-v2.2.0.apk
+            APP-Gold-v2.2.0.apk.sha256
           retention-days: 90
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-v2.0.0
-          name: APP Gold v2.0.0
+          tag_name: app-gold-v2.2.0
+          name: APP Gold v2.2.0
           target_commitish: app-gold
           body: |
-            APP Gold v2.0.0
+            APP Gold v2.2.0
             - Gold / Silver / Bronze / No-level reward area
             - Manual reward score controlled by management
             - Up to two work sections per employee
             - Hire date and live team-tenure message
             - Reward change history
+            - Purchase UI redesigned for large, clear mobile use
+            - Searchable item picker prevents accidental item switching
+            - Background refresh preserves the selected item
+            - Excel includes request date and a filterable item-history sheet
             - Existing HR, announcements and purchase modules preserved
             - New Android application id for safe side-by-side installation
           files: |
-            APP-Gold-v2.0.0.apk
-            APP-Gold-v2.0.0.apk.sha256
+            APP-Gold-v2.2.0.apk
+            APP-Gold-v2.2.0.apk.sha256
