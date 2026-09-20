@@ -1,0 +1,167 @@
+name: Build APP Gold Manager Android v2.2.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [app-gold]
+    paths:
+      - "app/**"
+      - ".github/workflows/build-app-gold-manager-android.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify redesigned purchase markers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("app/src/main/assets/www/index.html").read_text(encoding="utf-8")
+          required=[
+            'id="openBuyItemPicker"',
+            'id="selectedBuyItem"',
+            'id="itemPickerM"',
+            "renderBuyItemPicker",
+            "selectionStable",
+            "تاریخچه اقلام خرید",
+            "تاریخ ثبت درخواست",
+            "autoFilter",
+            "خاک اره",
+          ]
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit("Missing markers: "+repr(missing))
+          if "renderBuyItems(prevItem)" not in s:
+              raise SystemExit("Background refresh does not preserve selected item")
+          if "'<option value="">انتخاب نشده</option>'" not in s:
+              raise SystemExit("Purchase item does not default to an explicit unselected state")
+          print("PURCHASE_MARKERS_OK")
+          PY
+
+      - name: JavaScript syntax check
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("app/src/main/assets/www/index.html").read_text(encoding="utf-8")
+          scripts=re.findall(r"<script>(.*?)</script>",s,re.S)
+          if not scripts:
+              raise SystemExit("No inline script")
+          Path("/tmp/app-gold-manager.js").write_text("\n".join(scripts),encoding="utf-8")
+          PY
+          node --check /tmp/app-gold-manager.js
+          echo "JS_SYNTAX_OK"
+
+      - name: Run browser-level UI self-test
+        shell: bash
+        run: |
+          mkdir -p /tmp/appgold-test
+          cd /tmp/appgold-test
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund jsdom@26.1.0 >/dev/null
+          cat > test.mjs <<'JS'
+          import fs from 'fs';
+          import {JSDOM} from 'jsdom';
+          import {TextEncoder,TextDecoder} from 'util';
+          const html=fs.readFileSync(process.env.GITHUB_WORKSPACE+'/app/src/main/assets/www/index.html','utf8');
+          const dom=new JSDOM(html,{
+            runScripts:'dangerously',
+            url:'https://appassets.androidplatform.net/assets/www/index.html#selftest',
+            pretendToBeVisual:true,
+            beforeParse(window){
+              window.TextEncoder=TextEncoder;
+              window.TextDecoder=TextDecoder;
+              window.confirm=()=>true;
+              window.alert=()=>{};
+              window.fetch=async()=>({ok:false,status:500,text:async()=>'',json:async()=>({})});
+            }
+          });
+          await new Promise(r=>setTimeout(r,700));
+          const result=dom.window.document.getElementById('selftest')?.textContent;
+          if(result!=='SELFTEST_OK'){
+            throw new Error('UI self-test failed: '+result);
+          }
+          const selected=dom.window.document.getElementById('selectedBuyItem')?.textContent||'';
+          if(!selected.includes('خاک اره')) throw new Error('Selected item stability test failed');
+          console.log('UI_SELFTEST_OK');
+          dom.window.close();
+          JS
+          node test.mjs
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build manager APK
+        run: gradle --no-daemon :app:assembleManagerDebug
+
+      - name: Validate manager APK
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/manager/debug/app-manager-debug.apk"
+          test -s "$APK"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='com.alppco.appgold.manager'" /tmp/badging.txt
+          grep -q "application-label:'APP Gold Manager'" /tmp/badging.txt
+          unzip -p "$APK" assets/www/index.html > /tmp/packed-index.html
+          grep -q 'id="openBuyItemPicker"' /tmp/packed-index.html
+          grep -q 'تاریخچه اقلام خرید' /tmp/packed-index.html
+          cp "$APK" APP-Gold-Manager-Android-v2.2.0.apk
+          sha256sum APP-Gold-Manager-Android-v2.2.0.apk > APP-Gold-Manager-Android-v2.2.0.apk.sha256
+          echo "MANAGER_APK_OK"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: APP-Gold-Manager-Android-v2.2.0
+          path: |
+            APP-Gold-Manager-Android-v2.2.0.apk
+            APP-Gold-Manager-Android-v2.2.0.apk.sha256
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-gold-manager-android-v2.2.0
+          name: APP Gold Manager Android v2.2.0
+          target_commitish: app-gold
+          body: |
+            Manager pilot build with redesigned purchase workflow.
+            - Large readable mobile purchasing UI
+            - Searchable item picker
+            - Explicit selected-item confirmation
+            - Fix for item changing during the 15-second background refresh
+            - Managers can submit purchase requests when their account has purchase permission
+            - Excel export now contains request creation date
+            - New filterable sheet: تاریخچه اقلام خرید
+            - Example: filter کالا = خاک اره to see every request date, requester, quantity and status
+            - Separate Android application id: com.alppco.appgold.manager
+          files: |
+            APP-Gold-Manager-Android-v2.2.0.apk
+            APP-Gold-Manager-Android-v2.2.0.apk.sha256
