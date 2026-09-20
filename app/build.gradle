@@ -7,11 +7,24 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.alppco.appgold"
         minSdk 24
         targetSdk 35
-        versionCode 210
-        versionName "2.1.0-security"
+        versionCode 220
+        versionName "2.2.0"
+    }
+
+    flavorDimensions "edition"
+    productFlavors {
+        staff {
+            dimension "edition"
+            applicationId "com.alppco.appgold"
+            resValue "string", "app_name", "APP Gold"
+        }
+        manager {
+            dimension "edition"
+            applicationId "com.alppco.appgold.manager"
+            resValue "string", "app_name", "APP Gold Manager"
+        }
     }
 
     buildTypes {
