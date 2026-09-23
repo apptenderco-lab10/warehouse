@@ -1,4 +1,4 @@
-name: Build APP Gold Manager Android v2.2.0
+name: Build APP Gold Manager Android v2.3.0
 
 on:
   workflow_dispatch:
@@ -36,12 +36,19 @@ jobs:
             "تاریخ ثبت درخواست",
             "autoFilter",
             "خاک اره",
+            'id="financeMonthCard"',
+            'id="saveMonthlyFinance"',
+            "employee_monthly_finance",
+            'id="submitSinglePurchase"',
+            "نسخه ساده",
           ]
           missing=[x for x in required if x not in s]
           if missing:
               raise SystemExit("Missing markers: "+repr(missing))
           if "renderBuyItems(prevItem)" not in s:
               raise SystemExit("Background refresh does not preserve selected item")
+          if 'id="addBuyBasket"' in s or 'id="submitBuyBasket"' in s:
+              raise SystemExit("Legacy confusing basket flow still exists")
           if 'انتخاب نشده</option>' not in s:
               raise SystemExit("Purchase item does not default to an explicit unselected state")
           print("PURCHASE_MARKERS_OK")
@@ -132,36 +139,38 @@ jobs:
           unzip -p "$APK" assets/www/index.html > /tmp/packed-index.html
           grep -q 'id="openBuyItemPicker"' /tmp/packed-index.html
           grep -q 'تاریخچه اقلام خرید' /tmp/packed-index.html
-          cp "$APK" APP-Gold-Manager-Android-v2.2.0.apk
-          sha256sum APP-Gold-Manager-Android-v2.2.0.apk > APP-Gold-Manager-Android-v2.2.0.apk.sha256
+          cp "$APK" APP-Gold-Manager-Android-v2.3.0.apk
+          sha256sum APP-Gold-Manager-Android-v2.3.0.apk > APP-Gold-Manager-Android-v2.3.0.apk.sha256
           echo "MANAGER_APK_OK"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-Manager-Android-v2.2.0
+          name: APP-Gold-Manager-Android-v2.3.0
           path: |
-            APP-Gold-Manager-Android-v2.2.0.apk
-            APP-Gold-Manager-Android-v2.2.0.apk.sha256
+            APP-Gold-Manager-Android-v2.3.0.apk
+            APP-Gold-Manager-Android-v2.3.0.apk.sha256
           retention-days: 90
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-manager-android-v2.2.0
-          name: APP Gold Manager Android v2.2.0
+          tag_name: app-gold-manager-android-v2.3.0
+          name: APP Gold Manager Android v2.3.0
           target_commitish: app-gold
           body: |
             Manager pilot build with redesigned purchase workflow.
+            - Purchase request flow simplified to one item / one clear submit button
             - Large readable mobile purchasing UI
-            - Searchable item picker
-            - Explicit selected-item confirmation
+            - Searchable item picker and explicit selected-item confirmation
             - Fix for item changing during the 15-second background refresh
+            - Monthly advance/loan manager entry with automatic Jalali month rollover
+            - Employees see current-month advance and loan totals in large type on the first page
             - Managers can submit purchase requests when their account has purchase permission
             - Excel export now contains request creation date
             - New filterable sheet: تاریخچه اقلام خرید
             - Example: filter کالا = خاک اره to see every request date, requester, quantity and status
             - Separate Android application id: com.alppco.appgold.manager
           files: |
-            APP-Gold-Manager-Android-v2.2.0.apk
-            APP-Gold-Manager-Android-v2.2.0.apk.sha256
+            APP-Gold-Manager-Android-v2.3.0.apk
+            APP-Gold-Manager-Android-v2.3.0.apk.sha256
