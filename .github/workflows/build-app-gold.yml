@@ -1,4 +1,4 @@
-name: Build APP Gold Android v2.2.0
+name: Build APP Gold Android v2.3.0
 
 on:
   workflow_dispatch:
@@ -45,6 +45,11 @@ jobs:
               'id="openBuyItemPicker"',
               "تاریخچه اقلام خرید",
               "autoFilter",
+              'id="financeMonthCard"',
+              'id="myAdvanceAmount"',
+              'id="myLoanAmount"',
+              "employee_monthly_finance",
+              'id="submitSinglePurchase"',
           ]
           missing = [x for x in required if x not in s]
           if missing:
@@ -68,6 +73,39 @@ jobs:
           PY
           node --check /tmp/app-gold.js
           echo "JS_SYNTAX_OK"
+
+      - name: Browser-level UI self-test
+        shell: bash
+        run: |
+          mkdir -p /tmp/appgold-staff-test
+          cd /tmp/appgold-staff-test
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund jsdom@26.1.0 >/dev/null
+          cat > test.mjs <<'JS'
+          import fs from 'fs';
+          import {JSDOM} from 'jsdom';
+          import {TextEncoder,TextDecoder} from 'util';
+          const html=fs.readFileSync(process.env.GITHUB_WORKSPACE+'/app/src/main/assets/www/index.html','utf8');
+          const dom=new JSDOM(html,{
+            runScripts:'dangerously',
+            url:'https://appassets.androidplatform.net/assets/www/index.html#selftest',
+            pretendToBeVisual:true,
+            beforeParse(window){
+              window.TextEncoder=TextEncoder;
+              window.TextDecoder=TextDecoder;
+              window.confirm=()=>true;
+              window.alert=()=>{};
+              window.fetch=async()=>({ok:false,status:500,text:async()=>'',json:async()=>({})});
+            }
+          });
+          await new Promise(r=>setTimeout(r,700));
+          const result=dom.window.document.getElementById('selftest')?.textContent;
+          if(result!=='SELFTEST_OK') throw new Error('UI self-test failed: '+result);
+          if(dom.window.document.getElementById('addBuyBasket')) throw new Error('Old basket flow still exists');
+          console.log('STAFF_UI_SELFTEST_OK');
+          dom.window.close();
+          JS
+          node test.mjs
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -98,38 +136,40 @@ jobs:
         shell: bash
         run: |
           test -s app/build/outputs/apk/staff/debug/app-staff-debug.apk
-          cp app/build/outputs/apk/staff/debug/app-staff-debug.apk APP-Gold-v2.2.0.apk
-          sha256sum APP-Gold-v2.2.0.apk > APP-Gold-v2.2.0.apk.sha256
+          cp app/build/outputs/apk/staff/debug/app-staff-debug.apk APP-Gold-v2.3.0.apk
+          sha256sum APP-Gold-v2.3.0.apk > APP-Gold-v2.3.0.apk.sha256
           echo "APK_OK"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-v2.2.0
+          name: APP-Gold-v2.3.0
           path: |
-            APP-Gold-v2.2.0.apk
-            APP-Gold-v2.2.0.apk.sha256
+            APP-Gold-v2.3.0.apk
+            APP-Gold-v2.3.0.apk.sha256
           retention-days: 90
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-v2.2.0
-          name: APP Gold v2.2.0
+          tag_name: app-gold-v2.3.0
+          name: APP Gold v2.3.0
           target_commitish: app-gold
           body: |
-            APP Gold v2.2.0
+            APP Gold v2.3.0
             - Gold / Silver / Bronze / No-level reward area
             - Manual reward score controlled by management
             - Up to two work sections per employee
             - Hire date and live team-tenure message
             - Reward change history
-            - Purchase UI redesigned for large, clear mobile use
-            - Searchable item picker prevents accidental item switching
+            - Purchase request flow simplified to one item / one submit button
+            - Large readable purchase controls with searchable item picker
             - Background refresh preserves the selected item
+            - Current-month advance and loan totals shown in large type on the first page
+            - Automatic Jalali month rollover: a new month starts at zero until management enters values
             - Excel includes request date and a filterable item-history sheet
             - Existing HR, announcements and purchase modules preserved
             - New Android application id for safe side-by-side installation
           files: |
-            APP-Gold-v2.2.0.apk
-            APP-Gold-v2.2.0.apk.sha256
+            APP-Gold-v2.3.0.apk
+            APP-Gold-v2.3.0.apk.sha256
