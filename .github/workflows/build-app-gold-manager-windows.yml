@@ -1,4 +1,4 @@
-name: Build APP Gold Manager Windows v2.0.2
+name: Build APP Gold Manager Windows v2.3.0
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   test-build-release:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -25,25 +25,29 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify manager source markers
+      - name: Verify manager v2.3 source markers
         shell: pwsh
         run: |
           $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
           $required = @(
-            "APP Gold Manager v2.0.2",
-            'id="presenceTab"',
-            'id="presence"',
-            'id="presenceList"',
-            "user_presence",
-            "ManagerDesktop",
-            "آنلاین اکنون",
-            "آخرین اتصال"
+            "APP Gold v2.3.0",
+            'id="financeMonthCard"',
+            'id="myAdvanceAmount"',
+            'id="myLoanAmount"',
+            'id="saveMonthlyFinance"',
+            'id="submitSinglePurchase"',
+            "employee_monthly_finance",
+            "تاریخچه اقلام خرید",
+            "خاک اره"
           )
           foreach ($marker in $required) {
             if (-not $html.Contains($marker)) { throw "Missing marker: $marker" }
           }
+          if ($html.Contains('id="addBuyBasket"') -or $html.Contains('id="submitBuyBasket"')) {
+            throw "Legacy purchase basket flow still exists"
+          }
           $pkg = Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
-          if ($pkg.version -ne "2.0.2") { throw "Wrong version" }
+          if ($pkg.version -ne "2.3.0") { throw "Wrong version" }
           if ($pkg.build.appId -ne "com.alppco.appgold.manager.windows") { throw "Wrong appId" }
           if ($pkg.build.productName -ne "APP Gold Manager") { throw "Wrong product name" }
           Write-Host "SOURCE_MARKERS_OK"
@@ -60,6 +64,40 @@ jobs:
           node --check "$env:RUNNER_TEMP\manager-app.js"
           Write-Host "JS_SYNTAX_OK"
 
+      - name: Browser-level UI self-test
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\appgold-test" | Out-Null
+          Set-Location "$env:RUNNER_TEMP\appgold-test"
+          npm init -y | Out-Null
+          npm install --no-audit --no-fund jsdom@26.1.0 | Out-Null
+          @'
+          import fs from 'fs';
+          import {JSDOM} from 'jsdom';
+          import {TextEncoder,TextDecoder} from 'util';
+          const html=fs.readFileSync(process.env.GITHUB_WORKSPACE+'/windows-manager/www/index.html','utf8');
+          const dom=new JSDOM(html,{
+            runScripts:'dangerously',
+            url:'https://appassets.androidplatform.net/assets/www/index.html#selftest',
+            pretendToBeVisual:true,
+            beforeParse(window){
+              window.TextEncoder=TextEncoder;
+              window.TextDecoder=TextDecoder;
+              window.confirm=()=>true;
+              window.alert=()=>{};
+              window.fetch=async()=>({ok:false,status:500,text:async()=>'',json:async()=>({})});
+            }
+          });
+          await new Promise(r=>setTimeout(r,800));
+          const result=dom.window.document.getElementById('selftest')?.textContent;
+          if(result!=='SELFTEST_OK') throw new Error('UI self-test failed: '+result);
+          if(dom.window.document.getElementById('addBuyBasket')) throw new Error('Old basket flow still exists');
+          if(!dom.window.document.getElementById('financeMonthCard')) throw new Error('Finance card missing');
+          console.log('WINDOWS_UI_SELFTEST_OK');
+          dom.window.close();
+          '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\appgold-test\test.mjs"
+          node "$env:RUNNER_TEMP\appgold-test\test.mjs"
+
       - name: Install pinned dependencies
         working-directory: windows-manager
         run: npm install --no-audit --no-fund
@@ -73,12 +111,16 @@ jobs:
       - name: Validate installer and packaged app
         shell: pwsh
         run: |
-          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe" -ErrorAction Stop
+          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe" -ErrorAction Stop
           if ($installer.Length -lt 50000000) { throw "Installer unexpectedly small: $($installer.Length)" }
           $packed = Get-Item "windows-manager/dist/win-unpacked/APP Gold Manager.exe" -ErrorAction Stop
           if ($packed.Length -lt 50000000) { throw "Packaged EXE unexpectedly small: $($packed.Length)" }
+
+          $asar = "windows-manager/dist/win-unpacked/resources/app.asar"
+          if (-not (Test-Path $asar)) { throw "app.asar missing" }
+
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  APP-Gold-Manager-v2.0.2-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256"
+          "$hash  APP-Gold-Manager-v2.3.0-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256"
           Write-Host "BUILD_VALIDATION_OK size=$($installer.Length) sha256=$hash"
 
       - name: Runtime smoke test
@@ -94,27 +136,29 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-Manager-v2.0.2-Windows
+          name: APP-Gold-Manager-v2.3.0-Windows
           path: |
-            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256
           retention-days: 90
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-manager-windows-v2.0.2
-          name: APP Gold Manager v2.0.2 — Windows
+          tag_name: app-gold-manager-windows-v2.3.0
+          name: APP Gold Manager v2.3.0 — Windows
           target_commitish: app-gold
           body: |
-            Manager-only Windows build.
-            - Online / recent / offline personnel status
-            - Last connection timestamp
-            - Auto refresh every 15 seconds
-            - Presence visibility restricted to admin by Supabase RLS
-            - Existing APP Gold management features preserved
+            APP Gold Manager Windows v2.3.0
+            - Simplified purchase request flow: one item, one submit
+            - Clear searchable item picker
+            - Monthly advance and loan entry by management
+            - Employee current-month advance/loan card
+            - Automatic Jalali month rollover
+            - Excel purchase history by item and request date
+            - Existing HR / rewards / announcements / management features preserved
 
-            Note: this installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher.
+            Note: installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher.
           files: |
-            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.0.2-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe
+            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256
