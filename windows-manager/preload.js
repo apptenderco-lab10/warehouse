@@ -10,9 +10,3 @@ contextBridge.exposeInMainWorld('Android', {
     ipcRenderer.send('appgold:notify', { id, title, body, priority });
   }
 });
-
-contextBridge.exposeInMainWorld('ManagerDesktop', {
-  isManagerDesktop() {
-    return true;
-  }
-});
