@@ -2,7 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Notification, shell } = require('el
 const path = require('path');
 const fs = require('fs');
 
-app.setName('APP Gold Manager');
+app.setName('APP 20 Manager');
 app.setAppUserModelId('com.alppco.appgold.manager.windows');
 
 let mainWindow = null;
@@ -51,7 +51,7 @@ function createWindow() {
 
 ipcMain.on('appgold:save-base64', async (_event, payload) => {
   try {
-    const fileName = String(payload?.fileName || 'APP-Gold-Manager-Export.bin').replace(/[\\/:*?"<>|]/g, '-');
+    const fileName = String(payload?.fileName || 'APP-20-Manager-Export.bin').replace(/[\\/:*?"<>|]/g, '-');
     const mimeType = String(payload?.mimeType || 'application/octet-stream');
     const base64Data = String(payload?.base64Data || '');
 
@@ -74,7 +74,7 @@ ipcMain.on('appgold:notify', (_event, payload) => {
   try {
     if (!Notification.isSupported()) return;
     const n = new Notification({
-      title: String(payload?.title || 'APP Gold Manager'),
+      title: String(payload?.title || 'APP 20 Manager'),
       body: String(payload?.body || ''),
       urgency: payload?.priority === 'important' ? 'critical' : 'normal'
     });
