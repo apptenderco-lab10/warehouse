@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdk 24
         targetSdk 35
-        versionCode 230
-        versionName "2.3.0"
+        versionCode 2000
+        versionName "20.0.0"
     }
 
     flavorDimensions "edition"
@@ -18,12 +18,12 @@ android {
         staff {
             dimension "edition"
             applicationId "com.alppco.appgold"
-            resValue "string", "app_name", "APP Gold"
+            resValue "string", "app_name", "APP 20"
         }
         manager {
             dimension "edition"
             applicationId "com.alppco.appgold.manager"
-            resValue "string", "app_name", "APP Gold Manager"
+            resValue "string", "app_name", "APP 20 Manager"
         }
     }
 
