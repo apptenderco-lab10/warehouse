@@ -1,4 +1,4 @@
-name: Build APP Gold Manager Windows v2.3.0
+name: Build APP 20 Manager Windows
 
 on:
   workflow_dispatch:
@@ -25,31 +25,40 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify manager v2.3 source markers
+      - name: Verify APP 20 Manager source
         shell: pwsh
         run: |
           $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
           $required = @(
-            "APP Gold v2.3.0",
-            'id="financeMonthCard"',
-            'id="myAdvanceAmount"',
-            'id="myLoanAmount"',
-            'id="saveMonthlyFinance"',
+            "APP 20",
+            'data-p="me">🏠 صفحه اصلی',
+            'data-p="requests">📝 درخواست‌ها',
+            'id="personalMessageHome"',
+            'id="myLoanTotal"',
+            'id="myLoanInstallment"',
+            'id="myLoanRemaining"',
+            'id="loanReceiveMonth"',
+            'id="loanLastMonth"',
+            'id="saveLoan"',
+            'id="savePersonalMessage"',
+            "employee_loans",
+            "employee_personal_messages",
             'id="submitSinglePurchase"',
-            "employee_monthly_finance",
-            "تاریخچه اقلام خرید",
-            "خاک اره"
+            "تاریخچه اقلام خرید"
           )
           foreach ($marker in $required) {
             if (-not $html.Contains($marker)) { throw "Missing marker: $marker" }
           }
-          if ($html.Contains('id="addBuyBasket"') -or $html.Contains('id="submitBuyBasket"')) {
-            throw "Legacy purchase basket flow still exists"
-          }
-          $pkg = Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
-          if ($pkg.version -ne "2.3.0") { throw "Wrong version" }
+          $homeStart=$html.IndexOf('<section id="me"')
+          $reqStart=$html.IndexOf('<section id="requests"')
+          if ($homeStart -lt 0 -or $reqStart -lt 0) { throw "Home/request sections missing" }
+          $home=$html.Substring($homeStart,$reqStart-$homeStart)
+          if ($home.Contains('id="type"') -or $home.Contains('id="send"')) { throw "Request form still on home" }
+          if ($html.Contains('id="financeLoan"')) { throw "Legacy monthly loan input present" }
+          $pkg=Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
+          if ($pkg.version -ne "20.0.0") { throw "Wrong version" }
           if ($pkg.build.appId -ne "com.alppco.appgold.manager.windows") { throw "Wrong appId" }
-          if ($pkg.build.productName -ne "APP Gold Manager") { throw "Wrong product name" }
+          if ($pkg.build.productName -ne "APP 20 Manager") { throw "Wrong product name" }
           Write-Host "SOURCE_MARKERS_OK"
 
       - name: JavaScript syntax checks
@@ -57,18 +66,18 @@ jobs:
         run: |
           node --check windows-manager/main.js
           node --check windows-manager/preload.js
-          $html = Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
-          $m = [regex]::Match($html, '<script>([\s\S]*?)</script>')
+          $html=Get-Content -Raw -Encoding UTF8 "windows-manager/www/index.html"
+          $m=[regex]::Match($html,'<script>([\s\S]*?)</script>')
           if (-not $m.Success) { throw "Inline script not found" }
-          [IO.File]::WriteAllText("$env:RUNNER_TEMP\manager-app.js", $m.Groups[1].Value, [Text.UTF8Encoding]::new($false))
-          node --check "$env:RUNNER_TEMP\manager-app.js"
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\app20-manager.js",$m.Groups[1].Value,[Text.UTF8Encoding]::new($false))
+          node --check "$env:RUNNER_TEMP\app20-manager.js"
           Write-Host "JS_SYNTAX_OK"
 
       - name: Browser-level UI self-test
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\appgold-test" | Out-Null
-          Set-Location "$env:RUNNER_TEMP\appgold-test"
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\app20-win-test" | Out-Null
+          Set-Location "$env:RUNNER_TEMP\app20-win-test"
           npm init -y | Out-Null
           npm install --no-audit --no-fund jsdom@26.1.0 | Out-Null
           @'
@@ -88,15 +97,15 @@ jobs:
               window.fetch=async()=>({ok:false,status:500,text:async()=>'',json:async()=>({})});
             }
           });
-          await new Promise(r=>setTimeout(r,800));
+          await new Promise(r=>setTimeout(r,850));
           const result=dom.window.document.getElementById('selftest')?.textContent;
           if(result!=='SELFTEST_OK') throw new Error('UI self-test failed: '+result);
-          if(dom.window.document.getElementById('addBuyBasket')) throw new Error('Old basket flow still exists');
-          if(!dom.window.document.getElementById('financeMonthCard')) throw new Error('Finance card missing');
-          console.log('WINDOWS_UI_SELFTEST_OK');
+          if(!dom.window.document.getElementById('saveLoan')) throw new Error('Loan manager missing');
+          if(!dom.window.document.getElementById('savePersonalMessage')) throw new Error('Personal message manager missing');
+          console.log('APP20_WINDOWS_UI_SELFTEST_OK');
           dom.window.close();
-          '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\appgold-test\test.mjs"
-          node "$env:RUNNER_TEMP\appgold-test\test.mjs"
+          '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\app20-win-test\test.mjs"
+          node "$env:RUNNER_TEMP\app20-win-test\test.mjs"
 
       - name: Install pinned dependencies
         working-directory: windows-manager
@@ -111,54 +120,52 @@ jobs:
       - name: Validate installer and packaged app
         shell: pwsh
         run: |
-          $installer = Get-Item "windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe" -ErrorAction Stop
+          $installer=Get-Item "windows-manager/dist/APP-20-Manager-Windows-Setup.exe" -ErrorAction Stop
           if ($installer.Length -lt 50000000) { throw "Installer unexpectedly small: $($installer.Length)" }
-          $packed = Get-Item "windows-manager/dist/win-unpacked/APP Gold Manager.exe" -ErrorAction Stop
+          $packed=Get-Item "windows-manager/dist/win-unpacked/APP 20 Manager.exe" -ErrorAction Stop
           if ($packed.Length -lt 50000000) { throw "Packaged EXE unexpectedly small: $($packed.Length)" }
-
-          $asar = "windows-manager/dist/win-unpacked/resources/app.asar"
+          $asar="windows-manager/dist/win-unpacked/resources/app.asar"
           if (-not (Test-Path $asar)) { throw "app.asar missing" }
-
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  APP-Gold-Manager-v2.3.0-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256"
+          $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  APP-20-Manager-Windows-Setup.exe" | Set-Content -Encoding ascii "windows-manager/dist/APP-20-Manager-Windows-Setup.exe.sha256"
           Write-Host "BUILD_VALIDATION_OK size=$($installer.Length) sha256=$hash"
 
       - name: Runtime smoke test
         shell: pwsh
         run: |
-          $exe = (Resolve-Path "windows-manager/dist/win-unpacked/APP Gold Manager.exe").Path
-          $p = Start-Process -FilePath $exe -ArgumentList "--disable-gpu" -PassThru
+          $exe=(Resolve-Path "windows-manager/dist/win-unpacked/APP 20 Manager.exe").Path
+          $p=Start-Process -FilePath $exe -ArgumentList "--disable-gpu" -PassThru
           Start-Sleep -Seconds 10
-          if ($p.HasExited) { throw "APP Gold Manager exited during smoke test with code $($p.ExitCode)" }
+          if ($p.HasExited) { throw "APP 20 Manager exited during smoke test with code $($p.ExitCode)" }
           Stop-Process -Id $p.Id -Force
           Write-Host "RUNTIME_SMOKE_OK"
 
-      - name: Upload artifact
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: APP-Gold-Manager-v2.3.0-Windows
+          name: APP-20-Manager-Windows
           path: |
-            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-20-Manager-Windows-Setup.exe
+            windows-manager/dist/APP-20-Manager-Windows-Setup.exe.sha256
           retention-days: 90
 
-      - name: Publish GitHub Release
+      - name: Publish Windows Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: app-gold-manager-windows-v2.3.0
-          name: APP Gold Manager v2.3.0 — Windows
+          tag_name: app-20-manager-windows
+          name: APP 20 Manager — Windows
           target_commitish: app-gold
           body: |
-            APP Gold Manager Windows v2.3.0
-            - Simplified purchase request flow: one item, one submit
-            - Clear searchable item picker
-            - Monthly advance and loan entry by management
-            - Employee current-month advance/loan card
-            - Automatic Jalali month rollover
-            - Excel purchase history by item and request date
-            - Existing HR / rewards / announcements / management features preserved
+            APP 20 Manager Windows
+            - Loan amount and loan received month
+            - Installment start and final deduction month
+            - Automatic current installment and remaining loan calculation
+            - Monthly advance management
+            - Per-employee reward / praise / warning / personal messages
+            - New motivational employee home
+            - Simplified purchase workflow and Excel history retained
 
-            Note: installer is not commercially code-signed, so Windows SmartScreen may show Unknown Publisher.
+            Installer is not commercially code-signed; Windows SmartScreen may show Unknown Publisher.
           files: |
-            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe
-            windows-manager/dist/APP-Gold-Manager-v2.3.0-Windows-Setup.exe.sha256
+            windows-manager/dist/APP-20-Manager-Windows-Setup.exe
+            windows-manager/dist/APP-20-Manager-Windows-Setup.exe.sha256
