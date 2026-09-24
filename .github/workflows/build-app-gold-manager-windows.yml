@@ -52,8 +52,8 @@ jobs:
           $homeStart=$html.IndexOf('<section id="me"')
           $reqStart=$html.IndexOf('<section id="requests"')
           if ($homeStart -lt 0 -or $reqStart -lt 0) { throw "Home/request sections missing" }
-          $home=$html.Substring($homeStart,$reqStart-$homeStart)
-          if ($home.Contains('id="type"') -or $home.Contains('id="send"')) { throw "Request form still on home" }
+          $homeHtml=$html.Substring($homeStart,$reqStart-$homeStart)
+          if ($homeHtml.Contains('id="type"') -or $homeHtml.Contains('id="send"')) { throw "Request form still on home" }
           if ($html.Contains('id="financeLoan"')) { throw "Legacy monthly loan input present" }
           $pkg=Get-Content -Raw -Encoding UTF8 "windows-manager/package.json" | ConvertFrom-Json
           if ($pkg.version -ne "20.0.0") { throw "Wrong version" }
